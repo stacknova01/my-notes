@@ -187,4 +187,25 @@ body:not(.auth-page) .neon-title { animation: none; text-shadow: none; }
 .note p { margin: 0 0 10px; white-space: pre-wrap; }
 .note small { display: block; margin-bottom: 8px; color: var(--muted); }
 
-[hidden] { display: none !important; }
+[hidden] { display: none !important; }/* ---------- Plan & upgrade ---------- */
+.plan-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--secondary-bg);
+  font-size: 14px;
+}
+
+.upgrade-box {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 2px solid #a24bff;
+  border-radius: 12px;
+  box-shadow: 0 0 14px rgba(162, 75, 255, 0.4);
+}
+.upgrade-box h3 { margin: 0 0 8px; }
+.upgrade-box p { margin: 0 0 12px; }

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+zz<!DOCTYPE html>
 <html lang="en" data-theme="dark" data-font="system">
 <head>
   <meta charset="UTF-8">
@@ -53,7 +53,19 @@
         <button id="logout-btn" class="secondary" type="button">Log out</button>
       </div>
 
-      <input id="note-subject" list="subject-list" type="text" placeholder="Subject (e.g. Math)">
+     <div class="plan-bar">
+        <span id="plan-text"></span>
+        <button id="upgrade-btn" type="button" hidden>Upgrade</button>
+      </div>
+
+      <div id="upgrade-box" class="upgrade-box" hidden>
+        <h3>You've used your 2 free notes</h3>
+        <p>Subscribe for KSh 150 per month to add unlimited notes and support this project.</p>
+        <div class="row">
+          <button id="subscribe-btn" type="button">Subscribe: KSh 150/month</button>
+          <button id="close-upgrade" class="secondary" type="button">Not now</button>
+        </div>
+      </div> <input id="note-subject" list="subject-list" type="text" placeholder="Subject (e.g. Math)">
       <datalist id="subject-list"></datalist>
       <input id="note-title" type="text" placeholder="Title">
       <textarea id="note-body" rows="5" placeholder="Write your note..."></textarea>

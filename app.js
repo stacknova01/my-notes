@@ -4,6 +4,15 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
 
+// ---------- State ----------
+const FREE_LIMIT = 2;
+let allNotes = [];
+let activeSubject = "All";
+let editingId = null;
+let isSubscribed = false;
+let expiresAt = null;
+let signingUp = false;
+
 // ---------- Theme & font ----------
 function applyTheme(theme) {
   root.setAttribute("data-theme", theme);
@@ -34,8 +43,6 @@ $("theme-btn").addEventListener("click", () => {
 $("font-select").addEventListener("change", (e) => applyFont(e.target.value));
 
 // ---------- Auth pages ----------
-let signingUp = false;
-
 function setMsg(text, ok = false) {
   const m = $("auth-msg");
   m.textContent = text;
@@ -109,20 +116,81 @@ sb.auth.onAuthStateChange((event, session) => {
   if (session) {
     const name = session.user.user_metadata && session.user.user_metadata.full_name;
     $("greeting").textContent = name ? "Hello, " + name + " 👋" : session.user.email;
-    setTimeout(loadNotes, 0);
+        setTimeout(async () => { await handlePaymentReturn(); loadNotes(); loadSubscription(); }, 0);
   } else {
     allNotes = [];
+    isSubscribed = false;
+    expiresAt = null;
     $("notes-list").innerHTML = "";
     $("login-password").value = "";
+    hideUpgrade();
     resetForm();
   }
 });
 
-// ---------- Notes ----------
-let allNotes = [];
-let activeSubject = "All";
-let editingId = null;
+// ---------- Subscription ----------
+async function loadSubscription() {
+  const { data } = await sb.from("subscriptions").select("status, expires_at").maybeSingle();
+  expiresAt = data && data.expires_at ? new Date(data.expires_at) : null;
+  isSubscribed = !!expiresAt && expiresAt > new Date();
+  renderPlan();
+}
 
+function renderPlan() {
+  if (isSubscribed) {
+    $("plan-text").textContent = "⭐ Premium until " + expiresAt.toLocaleDateString();
+    $("upgrade-btn").hidden = true;
+  } else {
+    $("plan-text").textContent = "Free plan: " + allNotes.length + " notes (limit " + FREE_LIMIT + ")";
+    $("upgrade-btn").hidden = false;
+  }
+}
+
+function showUpgrade() {
+  $("upgrade-box").hidden = false;
+  $("upgrade-box").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function hideUpgrade() { $("upgrade-box").hidden = true; }
+
+$("upgrade-btn").addEventListener("click", showUpgrade);
+$("close-upgrade").addEventListener("click", hideUpgrade);
+$("subscribe-btn").addEventListener("click", async () => {
+  const btn = $("subscribe-btn");
+  btn.disabled = true;
+  btn.textContent = "Opening payment...";
+  try {
+    const { data } = await sb.auth.getSession();
+    const r = await fetch("/api/pay", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + data.session.access_token },
+    });
+    const out = await r.json();
+    if (!r.ok || !out.url) throw new Error(out.error || "Could not start payment");
+    window.location.href = out.url;
+  } catch (e) {
+    alert(e.message);
+    btn.disabled = false;
+    btn.textContent = "Subscribe: KSh 150/month";
+  }
+});
+
+async function handlePaymentReturn() {
+  const ref = new URLSearchParams(location.search).get("reference");
+  if (!ref) return;
+  history.replaceState({}, "", location.pathname);
+  try {
+    const r = await fetch("/api/verify?reference=" + encodeURIComponent(ref));
+    const out = await r.json();
+    await loadSubscription();
+    alert(out.ok
+      ? "Payment received. Premium is active. Thank you!"
+      : "We couldn't confirm your payment yet. If you were charged, wait a minute and refresh the page.");
+  } catch (e) {
+    alert("Could not confirm the payment. Please refresh in a minute.");
+  }
+}
+
+// ---------- Notes ----------
 async function loadNotes() {
   const { data, error } = await sb
     .from("notes")
@@ -167,6 +235,7 @@ function updateSubjectUI() {
 
 function render() {
   updateSubjectUI();
+  renderPlan();
 
   const term = $("search").value.trim().toLowerCase();
   const list = $("notes-list");
@@ -257,11 +326,19 @@ $("save-btn").addEventListener("click", async () => {
   if (!title && !body) return;
 
   if (editingId) {
-    await sb.from("notes").update({ subject, title, body }).eq("id", editingId);
+    const { error } = await sb.from("notes").update({ subject, title, body }).eq("id", editingId);
+    if (error) { alert("Could not update: " + error.message); return; }
   } else {
-    await sb.from("notes").insert({ subject, title, body });
+    if (!isSubscribed && allNotes.length >= FREE_LIMIT) { showUpgrade(); return; }
+    const { error } = await sb.from("notes").insert({ subject, title, body });
+    if (error) {
+      if (error.code === "42501") showUpgrade();
+      else alert("Could not save: " + error.message);
+      return;
+    }
   }
   resetForm();
+  hideUpgrade();
   loadNotes();
 });
 
