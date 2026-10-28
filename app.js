@@ -1,3 +1,5 @@
+const SUPABASE_URL = "https://rmljchchvynyzwluwuyn.supabase.co";
+const SUPABASE_KEY = "sb_publishable_-Qs8xSWmuhR6sr4uQ6FNJA_2_6IHCQb";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
