@@ -1,37 +1,71 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" data-font="system">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>My Notes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Fira+Code:wght@400;600&family=Merriweather:wght@400;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <main>
-    <h1>My Notes</h1>
+<body class="auth-page">
+  <header class="topbar">
+    <button id="theme-btn" class="secondary" type="button">☀️ Light mode</button>
+    <select id="font-select" aria-label="Font style">
+      <option value="system">System font</option>
+      <option value="poppins">Poppins</option>
+      <option value="merriweather">Merriweather</option>
+      <option value="firacode">Fira Code</option>
+      <option value="caveat">Handwriting</option>
+    </select>
+  </header>
 
-    <!-- Login section -->
-    <section id="auth-section">
-      <input id="email" type="email" placeholder="Email">
-      <input id="password" type="password" placeholder="Password">
-      <div class="row">
-        <button id="login-btn">Log in</button>
-        <button id="signup-btn" class="secondary">Sign up</button>
+  <main>
+    <h1 class="neon-title">My Notes</h1>
+
+    <!-- Login / Sign up (separate pages) -->
+    <section id="auth-section" class="card neon-card">
+      <div id="login-view">
+        <h2>Welcome back</h2>
+        <input id="login-email" type="email" placeholder="Email">
+        <input id="login-password" type="password" placeholder="Password">
+        <button id="login-btn" type="button">Log in</button>
+        <p class="switch">No account yet? <a href="#" id="to-signup">Sign up</a></p>
       </div>
+
+      <div id="signup-view" hidden>
+        <h2>Create account</h2>
+        <input id="signup-name" type="text" placeholder="Your name">
+        <input id="signup-email" type="email" placeholder="Email">
+        <input id="signup-password" type="password" placeholder="Password (6+ characters)">
+        <button id="signup-btn" type="button">Sign up</button>
+        <p class="switch">Already have an account? <a href="#" id="to-login">Log in</a></p>
+      </div>
+
       <p id="auth-msg"></p>
     </section>
 
-    <!-- Notes section (hidden until logged in) -->
-    <section id="notes-section" hidden>
+    <!-- Notes (hidden until logged in) -->
+    <section id="notes-section" class="card" hidden>
       <div class="row space">
-        <span id="user-email"></span>
-        <button id="logout-btn" class="secondary">Log out</button>
+        <span id="greeting"></span>
+        <button id="logout-btn" class="secondary" type="button">Log out</button>
       </div>
 
+      <input id="note-subject" list="subject-list" type="text" placeholder="Subject (e.g. Math)">
+      <datalist id="subject-list"></datalist>
       <input id="note-title" type="text" placeholder="Title">
       <textarea id="note-body" rows="5" placeholder="Write your note..."></textarea>
-      <button id="save-btn">Save note</button>
+      <div class="row">
+        <button id="save-btn" type="button">Save note</button>
+        <button id="cancel-btn" class="secondary" type="button" hidden>Cancel edit</button>
+      </div>
 
+      <hr>
+
+      <input id="search" type="search" placeholder="Search notes...">
+      <div id="subject-filters" class="chips"></div>
       <div id="notes-list"></div>
     </section>
   </main>

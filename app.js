@@ -1,78 +1,208 @@
-const SUPABASE_URL = "https://rmljchchvynyzwluwuyn.supabase.co";
-const SUPABASE_KEY = "sb_publishable_-Qs8xSWmuhR6sr4uQ6FNJA_2_6IHCQb";
-
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = (id) => document.getElementById(id);
+const root = document.documentElement;
 
-const authSection = document.getElementById("auth-section");
-const notesSection = document.getElementById("notes-section");
-const emailInput = document.getElementById("email");
-const passwordInput = document.getElementById("password");
-const authMsg = document.getElementById("auth-msg");
-const userEmail = document.getElementById("user-email");
-const titleInput = document.getElementById("note-title");
-const bodyInput = document.getElementById("note-body");
-const saveBtn = document.getElementById("save-btn");
-const notesList = document.getElementById("notes-list");
+// ---------- Theme & font ----------
+function applyTheme(theme) {
+  root.setAttribute("data-theme", theme);
+  $("theme-btn").textContent = theme === "dark" ? "☀️ Light mode" : "🌙 Dark mode";
+  try { localStorage.setItem("theme", theme); } catch (e) {}
+}
 
-let editingId = null;
+function applyFont(font) {
+  root.setAttribute("data-font", font);
+  $("font-select").value = font;
+  try { localStorage.setItem("font", font); } catch (e) {}
+}
 
-// ---------- Auth ----------
-document.getElementById("signup-btn").addEventListener("click", async () => {
-  authMsg.textContent = "";
-  const { error } = await sb.auth.signUp({
-    email: emailInput.value.trim(),
-    password: passwordInput.value,
+(function loadPrefs() {
+  let theme = "dark";
+  let font = "system";
+  try {
+    theme = localStorage.getItem("theme") || theme;
+    font = localStorage.getItem("font") || font;
+  } catch (e) {}
+  applyTheme(theme);
+  applyFont(font);
+})();
+
+$("theme-btn").addEventListener("click", () => {
+  applyTheme(root.getAttribute("data-theme") === "dark" ? "light" : "dark");
+});
+$("font-select").addEventListener("change", (e) => applyFont(e.target.value));
+
+// ---------- Auth pages ----------
+let signingUp = false;
+
+function setMsg(text, ok = false) {
+  const m = $("auth-msg");
+  m.textContent = text;
+  m.className = ok ? "ok" : "";
+}
+
+function showAuthView(view, message = "", ok = false) {
+  $("login-view").hidden = view !== "login";
+  $("signup-view").hidden = view !== "signup";
+  setMsg(message, ok);
+}
+
+$("to-signup").addEventListener("click", (e) => { e.preventDefault(); showAuthView("signup"); });
+$("to-login").addEventListener("click", (e) => { e.preventDefault(); showAuthView("login"); });
+
+$("signup-btn").addEventListener("click", async () => {
+  const name = $("signup-name").value.trim();
+  const email = $("signup-email").value.trim();
+  const password = $("signup-password").value;
+
+  if (!name || !email || !password) { setMsg("Please fill in your name, email and password."); return; }
+  if (password.length < 6) { setMsg("Password must be at least 6 characters."); return; }
+
+  setMsg("");
+  signingUp = true;
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: name } },
   });
-  authMsg.textContent = error
-    ? error.message
-    : "Sign up done. Check your email to confirm, then log in.";
+
+  if (error) { signingUp = false; setMsg(error.message); return; }
+
+  const autoLoggedIn = !!data.session;
+  if (autoLoggedIn) await sb.auth.signOut();
+  signingUp = false;
+
+  $("signup-password").value = "";
+  $("login-email").value = email;
+  showAuthView(
+    "login",
+    autoLoggedIn
+      ? "Account created! Please log in."
+      : "Account created! Check your email to confirm, then log in.",
+    true
+  );
 });
 
-document.getElementById("login-btn").addEventListener("click", async () => {
-  authMsg.textContent = "";
-  const { error } = await sb.auth.signInWithPassword({
-    email: emailInput.value.trim(),
-    password: passwordInput.value,
-  });
-  if (error) authMsg.textContent = error.message;
+$("login-btn").addEventListener("click", async () => {
+  const email = $("login-email").value.trim();
+  const password = $("login-password").value;
+  if (!email || !password) { setMsg("Enter your email and password."); return; }
+
+  setMsg("");
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) setMsg(error.message);
 });
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
-  await sb.auth.signOut();
-});
+$("login-password").addEventListener("keydown", (e) => { if (e.key === "Enter") $("login-btn").click(); });
+$("signup-password").addEventListener("keydown", (e) => { if (e.key === "Enter") $("signup-btn").click(); });
+
+$("logout-btn").addEventListener("click", async () => { await sb.auth.signOut(); });
 
 sb.auth.onAuthStateChange((event, session) => {
+  if (session && signingUp) return; // stay on the login page after sign up
+
+  document.body.classList.toggle("auth-page", !session);
+  $("auth-section").hidden = !!session;
+  $("notes-section").hidden = !session;
+
   if (session) {
-    authSection.hidden = true;
-    notesSection.hidden = false;
-    userEmail.textContent = session.user.email;
-    loadNotes();
+    const name = session.user.user_metadata && session.user.user_metadata.full_name;
+    $("greeting").textContent = name ? "Hello, " + name + " 👋" : session.user.email;
+    setTimeout(loadNotes, 0);
   } else {
-    authSection.hidden = false;
-    notesSection.hidden = true;
-    notesList.innerHTML = "";
-    passwordInput.value = "";
+    allNotes = [];
+    $("notes-list").innerHTML = "";
+    $("login-password").value = "";
     resetForm();
   }
 });
 
 // ---------- Notes ----------
+let allNotes = [];
+let activeSubject = "All";
+let editingId = null;
+
 async function loadNotes() {
   const { data, error } = await sb
     .from("notes")
     .select("*")
     .order("created_at", { ascending: false });
 
-  notesList.innerHTML = "";
   if (error) {
-    notesList.textContent = "Could not load notes: " + error.message;
+    $("notes-list").textContent = "Could not load notes: " + error.message;
     return;
   }
-  if (data.length === 0) {
-    notesList.textContent = "No notes yet. Write your first one above.";
+  allNotes = data;
+  render();
+}
+
+function subjectOf(note) {
+  return note.subject || "General";
+}
+
+function updateSubjectUI() {
+  const subjects = [...new Set(allNotes.map(subjectOf))].sort((a, b) => a.localeCompare(b));
+  if (activeSubject !== "All" && !subjects.includes(activeSubject)) activeSubject = "All";
+
+  const chips = $("subject-filters");
+  chips.innerHTML = "";
+  ["All", ...subjects].forEach((s) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (s === activeSubject ? " active" : "");
+    b.textContent = s;
+    b.addEventListener("click", () => { activeSubject = s; render(); });
+    chips.appendChild(b);
+  });
+
+  const list = $("subject-list");
+  list.innerHTML = "";
+  subjects.forEach((s) => {
+    const o = document.createElement("option");
+    o.value = s;
+    list.appendChild(o);
+  });
+}
+
+function render() {
+  updateSubjectUI();
+
+  const term = $("search").value.trim().toLowerCase();
+  const list = $("notes-list");
+  list.innerHTML = "";
+
+  const filtered = allNotes.filter((n) => {
+    const subj = subjectOf(n);
+    if (activeSubject !== "All" && subj !== activeSubject) return false;
+    if (!term) return true;
+    return (
+      (n.title || "").toLowerCase().includes(term) ||
+      (n.body || "").toLowerCase().includes(term) ||
+      subj.toLowerCase().includes(term)
+    );
+  });
+
+  if (filtered.length === 0) {
+    list.textContent = allNotes.length
+      ? "No notes match your search."
+      : "No notes yet. Write your first one above.";
     return;
   }
-  data.forEach(renderNote);
+
+  const groups = {};
+  filtered.forEach((n) => {
+    const s = subjectOf(n);
+    (groups[s] = groups[s] || []).push(n);
+  });
+
+  Object.keys(groups)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((s) => {
+      const h = document.createElement("h2");
+      h.className = "group-title";
+      h.textContent = s + " (" + groups[s].length + ")";
+      list.appendChild(h);
+      groups[s].forEach(renderNote);
+    });
 }
 
 function renderNote(note) {
@@ -96,9 +226,11 @@ function renderNote(note) {
   editBtn.textContent = "Edit";
   editBtn.addEventListener("click", () => {
     editingId = note.id;
-    titleInput.value = note.title || "";
-    bodyInput.value = note.body || "";
-    saveBtn.textContent = "Update note";
+    $("note-subject").value = subjectOf(note);
+    $("note-title").value = note.title || "";
+    $("note-body").value = note.body || "";
+    $("save-btn").textContent = "Update note";
+    $("cancel-btn").hidden = false;
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
 
@@ -113,26 +245,32 @@ function renderNote(note) {
 
   row.append(editBtn, delBtn);
   div.append(h3, small, p, row);
-  notesList.appendChild(div);
+  $("notes-list").appendChild(div);
 }
 
-saveBtn.addEventListener("click", async () => {
-  const title = titleInput.value.trim();
-  const body = bodyInput.value.trim();
+$("save-btn").addEventListener("click", async () => {
+  const subject = $("note-subject").value.trim() || "General";
+  const title = $("note-title").value.trim();
+  const body = $("note-body").value.trim();
   if (!title && !body) return;
 
   if (editingId) {
-    await sb.from("notes").update({ title, body }).eq("id", editingId);
+    await sb.from("notes").update({ subject, title, body }).eq("id", editingId);
   } else {
-    await sb.from("notes").insert({ title, body });
+    await sb.from("notes").insert({ subject, title, body });
   }
   resetForm();
   loadNotes();
 });
 
+$("cancel-btn").addEventListener("click", resetForm);
+$("search").addEventListener("input", render);
+
 function resetForm() {
   editingId = null;
-  titleInput.value = "";
-  bodyInput.value = "";
-  saveBtn.textContent = "Save note";
+  $("note-subject").value = "";
+  $("note-title").value = "";
+  $("note-body").value = "";
+  $("save-btn").textContent = "Save note";
+  $("cancel-btn").hidden = true;
 }
