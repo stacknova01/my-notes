@@ -20,5 +20,9 @@ module.exports = async (req, res) => {
   });
 
   if (!result.status) return res.status(400).json({ error: result.message || "Could not start payment" });
-  res.status(200).json({ url: result.data.authorization_url });
+  res.status(200).json({
+    url: result.data.authorization_url,
+    access_code: result.data.access_code,
+    reference: result.data.reference,
+  });
 };

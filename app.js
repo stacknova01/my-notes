@@ -116,7 +116,7 @@ sb.auth.onAuthStateChange((event, session) => {
   if (session) {
     const name = session.user.user_metadata && session.user.user_metadata.full_name;
     $("greeting").textContent = name ? "Hello, " + name + " 👋" : session.user.email;
-        setTimeout(async () => { await handlePaymentReturn(); loadNotes(); loadSubscription(); }, 0);
+    setTimeout(async () => { await handlePaymentReturn(); loadNotes(); loadSubscription(); }, 0);
   } else {
     allNotes = [];
     isSubscribed = false;
@@ -154,6 +154,30 @@ function hideUpgrade() { $("upgrade-box").hidden = true; }
 
 $("upgrade-btn").addEventListener("click", showUpgrade);
 $("close-upgrade").addEventListener("click", hideUpgrade);
+
+// ---------- Payments (Paystack popup) ----------
+async function afterPayment(reference) {
+  try {
+    const r = await fetch("/api/verify?reference=" + encodeURIComponent(reference));
+    const out = await r.json();
+    await loadSubscription();
+    hideUpgrade();
+    alert(out.ok
+      ? "Payment received. Premium is active. Thank you!"
+      : "We couldn't confirm your payment yet. If you were charged, wait a minute and refresh the page.");
+  } catch (e) {
+    alert("Could not confirm the payment. Please refresh in a minute.");
+  }
+}
+
+// Used when the payment page redirected back to the site (fallback)
+async function handlePaymentReturn() {
+  const ref = new URLSearchParams(location.search).get("reference");
+  if (!ref) return;
+  history.replaceState({}, "", location.pathname);
+  await afterPayment(ref);
+}
+
 $("subscribe-btn").addEventListener("click", async () => {
   const btn = $("subscribe-btn");
   btn.disabled = true;
@@ -165,30 +189,24 @@ $("subscribe-btn").addEventListener("click", async () => {
       headers: { Authorization: "Bearer " + data.session.access_token },
     });
     const out = await r.json();
-    if (!r.ok || !out.url) throw new Error(out.error || "Could not start payment");
-    window.location.href = out.url;
+    if (!r.ok || !out.access_code) throw new Error(out.error || "Could not start payment");
+
+    if (window.PaystackPop) {
+      const popup = new PaystackPop();
+      popup.resumeTransaction(out.access_code, {
+        onSuccess: (tx) => afterPayment((tx && tx.reference) || out.reference),
+        onCancel: () => {},
+        onError: (err) => alert("Payment error: " + ((err && err.message) || "please try again")),
+      });
+    } else {
+      window.location.href = out.url; // popup blocked: use the redirect page
+    }
   } catch (e) {
     alert(e.message);
-    btn.disabled = false;
-    btn.textContent = "Subscribe: KSh 150/month";
   }
+  btn.disabled = false;
+  btn.textContent = "Subscribe: KSh 150/month";
 });
-
-async function handlePaymentReturn() {
-  const ref = new URLSearchParams(location.search).get("reference");
-  if (!ref) return;
-  history.replaceState({}, "", location.pathname);
-  try {
-    const r = await fetch("/api/verify?reference=" + encodeURIComponent(ref));
-    const out = await r.json();
-    await loadSubscription();
-    alert(out.ok
-      ? "Payment received. Premium is active. Thank you!"
-      : "We couldn't confirm your payment yet. If you were charged, wait a minute and refresh the page.");
-  } catch (e) {
-    alert("Could not confirm the payment. Please refresh in a minute.");
-  }
-}
 
 // ---------- Notes ----------
 async function loadNotes() {

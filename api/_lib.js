@@ -1,6 +1,7 @@
 const SB_URL = process.env.SUPABASE_URL;
-const SB_SERVICE = process.env.SUPABASE_SERVICE_KEY;
-const PS_SECRET = process.env.PAYSTACK_SECRET_KEY;
+const SB_SERVICE = process.env.SUPABASE_SERVICE_KEY || "";
+const PS_SECRET = process.env.PAYSTACK_SECRET_KEY || "";
+const LIVE_MODE = PS_SECRET.startsWith("sk_live");
 
 const PRICE_KES = 150;
 const DAYS = 30;
@@ -31,6 +32,7 @@ async function creditPayment(reference) {
   const result = await paystack("/transaction/verify/" + encodeURIComponent(reference));
   const tx = result && result.data;
   if (!result.status || !tx || tx.status !== "success") return { ok: false, reason: "not_successful" };
+  if (LIVE_MODE && tx.domain !== "live") return { ok: false, reason: "test_payment" };
   if (tx.currency !== "KES" || tx.amount < PRICE_KES * 100) return { ok: false, reason: "wrong_amount" };
 
   const userId = tx.metadata && tx.metadata.user_id;
